@@ -1,14 +1,13 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Navigator — ระบบนำทาง</title>
+<title>myEve navigation</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"/>
 <style>
   :root {
     --bg: #0a0a0f;
@@ -22,833 +21,406 @@
     --text-dim: #6a6a8a;
     --panel-w: 360px;
   }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Syne',sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; display:flex; }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: 'Syne', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-  }
-
-  /* ─── SIDE PANEL ─── */
-  #panel {
-    width: var(--panel-w);
-    min-width: var(--panel-w);
-    height: 100vh;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    z-index: 1000;
-    overflow: hidden;
-  }
-
-  #panel-header {
-    padding: 20px 20px 16px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg);
-  }
-
-  .logo {
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--accent);
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-
-  #panel-header h1 {
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-    color: var(--text);
-  }
+  /* PANEL */
+  #panel { width:var(--panel-w); min-width:var(--panel-w); height:100vh; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; z-index:1000; overflow:hidden; }
+  #panel-header { padding:20px 20px 16px; border-bottom:1px solid var(--border); background:var(--bg); }
+  .logo { font-family:'Space Mono',monospace; font-size:11px; color:var(--accent); letter-spacing:4px; text-transform:uppercase; margin-bottom:4px; }
+  #panel-header h1 { font-size:22px; font-weight:800; letter-spacing:-0.5px; }
 
   /* TABS */
-  #tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .tab {
-    flex: 1;
-    padding: 12px 8px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    background: transparent;
-    border: none;
-    color: var(--text-dim);
-    cursor: pointer;
-    transition: all 0.2s;
-    font-family: 'Space Mono', monospace;
-  }
-
-  .tab.active {
-    color: var(--accent);
-    background: rgba(0,255,136,0.06);
-    border-bottom: 2px solid var(--accent);
-  }
-
-  .tab:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.03); }
-
-  /* TAB CONTENT */
-  .tab-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
-  .tab-content.active { display: flex; }
-
-  /* NAVIGATE TAB */
-  #nav-content { padding: 16px; gap: 10px; overflow-y: auto; }
-
-  .field-label {
-    font-size: 10px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    font-family: 'Space Mono', monospace;
-    margin-bottom: 5px;
-  }
-
-  .input-group { position: relative; }
-
-  .dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-    z-index: 1;
-  }
-  .dot.green { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-  .dot.red   { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
-
-  .nav-input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 11px 12px 11px 32px;
-    font-size: 13px;
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-
-  .nav-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(0,255,136,0.12);
-  }
-
-  .nav-input::placeholder { color: var(--text-dim); }
-
-  /* Autocomplete */
-  .autocomplete-list {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0; right: 0;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    z-index: 9999;
-    max-height: 200px;
-    overflow-y: auto;
-    display: none;
-  }
-
-  .autocomplete-list.show { display: block; }
-
-  .ac-item {
-    padding: 10px 14px;
-    font-size: 12px;
-    cursor: pointer;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.15s;
-    line-height: 1.4;
-  }
-
-  .ac-item:last-child { border-bottom: none; }
-  .ac-item:hover { background: rgba(0,255,136,0.07); }
-  .ac-item .ac-main { color: var(--text); font-weight: 600; }
-  .ac-item .ac-sub { color: var(--text-dim); font-size: 10px; margin-top: 2px; }
-
-  /* Mode selector */
-  .mode-selector { display: flex; gap: 6px; }
-
-  .mode-btn {
-    flex: 1;
-    padding: 8px 6px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-dim);
-    cursor: pointer;
-    transition: all 0.2s;
-    font-family: 'Space Mono', monospace;
-    display: flex; align-items: center; justify-content: center; gap: 4px;
-  }
-
-  .mode-btn.active {
-    background: rgba(0,136,255,0.12);
-    border-color: var(--accent2);
-    color: var(--accent2);
-  }
-
-  .mode-btn:hover:not(.active) { border-color: var(--text-dim); color: var(--text); }
-
-  /* Buttons */
-  .btn-primary {
-    width: 100%;
-    padding: 13px;
-    background: var(--accent);
-    border: none;
-    border-radius: 8px;
-    color: #000;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    cursor: pointer;
-    font-family: 'Syne', sans-serif;
-    transition: opacity 0.2s, transform 0.1s;
-  }
-
-  .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
-  .btn-primary:active { transform: translateY(0); }
-
-  .btn-secondary {
-    width: 100%;
-    padding: 10px;
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text-dim);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'Syne', sans-serif;
-    transition: all 0.2s;
-  }
-
-  .btn-secondary:hover { border-color: var(--accent3); color: var(--accent3); }
-
-  /* Route Info */
-  #route-info {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px;
-    display: none;
-    gap: 12px;
-  }
-
-  #route-info.show { display: flex; flex-direction: column; }
-
-  .route-stats { display: flex; gap: 10px; }
-
-  .stat-box {
-    flex: 1;
-    background: var(--bg);
-    border-radius: 8px;
-    padding: 10px;
-    text-align: center;
-  }
-
-  .stat-val {
-    font-size: 20px;
-    font-weight: 800;
-    color: var(--accent);
-    font-family: 'Space Mono', monospace;
-    line-height: 1;
-  }
-
-  .stat-unit {
-    font-size: 10px;
-    color: var(--text-dim);
-    margin-top: 3px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-
-  /* Steps */
-  #steps-list {
-    max-height: 200px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .step-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 8px 10px;
-    background: var(--bg);
-    border-radius: 6px;
-    font-size: 11px;
-    line-height: 1.4;
-  }
-
-  .step-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
-  .step-text { color: var(--text-dim); }
-  .step-dist { font-family: 'Space Mono', monospace; color: var(--accent2); font-size: 10px; margin-top: 2px; }
-
-  /* SEARCH TAB */
-  #search-content { padding: 16px; gap: 10px; overflow-y: auto; }
-
-  #search-results { display: flex; flex-direction: column; gap: 6px; }
-
-  .result-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .result-card:hover { border-color: var(--accent2); background: rgba(0,136,255,0.05); }
-
-  .result-card .r-name { font-size: 13px; font-weight: 700; }
-  .result-card .r-addr { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
-  .result-card .r-type { font-size: 9px; color: var(--accent2); letter-spacing: 2px; text-transform: uppercase; font-family: 'Space Mono', monospace; margin-bottom: 4px; }
-
-  /* MY LOCATION TAB */
-  #location-content { padding: 16px; gap: 10px; overflow-y: auto; }
-
-  .location-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .coord-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 10px;
-    background: var(--bg);
-    border-radius: 6px;
-  }
-
-  .coord-label { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; font-family: 'Space Mono', monospace; }
-  .coord-val { font-size: 13px; font-family: 'Space Mono', monospace; color: var(--accent); }
-
-  /* SPINNER */
-  .spinner {
-    width: 16px; height: 16px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    display: inline-block;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* Status */
-  #status-bar {
-    padding: 8px 16px;
-    background: var(--bg);
-    border-top: 1px solid var(--border);
-    font-size: 10px;
-    font-family: 'Space Mono', monospace;
-    color: var(--text-dim);
-    letter-spacing: 1px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .status-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 6px var(--accent);
-    flex-shrink: 0;
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-  /* ─── MAP ─── */
-  #map { flex: 1; height: 100vh; }
-
-  /* Map Overlay Buttons */
-  #map-controls {
-    position: absolute;
-    right: 16px;
-    bottom: 100px;
-    z-index: 800;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .map-btn {
-    width: 44px; height: 44px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    font-size: 18px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s;
-    backdrop-filter: blur(10px);
-  }
-
-  .map-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-  /* Map Tile Switcher */
-  #tile-switcher {
-    position: absolute;
-    right: 70px;
-    bottom: 40px;
-    z-index: 800;
-    display: flex;
-    gap: 6px;
-  }
-
-  .tile-btn {
-    padding: 6px 12px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    color: var(--text-dim);
-    cursor: pointer;
-    transition: all 0.2s;
-    font-family: 'Space Mono', monospace;
-  }
-
-  .tile-btn.active { background: rgba(0,255,136,0.1); border-color: var(--accent); color: var(--accent); }
-
-  /* Locate me marker pulse */
-  .my-location-marker {
-    width: 16px; height: 16px;
-    background: var(--accent2);
-    border: 3px solid white;
-    border-radius: 50%;
-    box-shadow: 0 0 0 4px rgba(0,136,255,0.3);
-    animation: locPulse 2s ease-in-out infinite;
-  }
-
-  @keyframes locPulse {
-    0%,100% { box-shadow: 0 0 0 4px rgba(0,136,255,0.3); }
-    50%      { box-shadow: 0 0 0 10px rgba(0,136,255,0); }
-  }
-
-  /* Custom leaflet popup */
-  .leaflet-popup-content-wrapper {
-    background: var(--surface) !important;
-    color: var(--text) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
-  }
-
-  .leaflet-popup-tip { background: var(--surface) !important; }
-
-  .popup-body { font-family: 'Syne', sans-serif; font-size: 13px; }
-  .popup-title { font-weight: 700; margin-bottom: 4px; }
-  .popup-coords { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text-dim); }
-  .popup-btn {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 5px 12px;
-    background: var(--accent);
-    color: #000;
-    font-size: 11px;
-    font-weight: 700;
-    border-radius: 6px;
-    cursor: pointer;
-    font-family: 'Syne', sans-serif;
-    border: none;
-  }
-
-  /* Divider */
-  .divider { height: 1px; background: var(--border); margin: 2px 0; flex-shrink: 0; }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-  /* Toast */
-  #toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(60px);
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 20px;
-    border-radius: 30px;
-    font-size: 12px;
-    font-family: 'Space Mono', monospace;
-    z-index: 9999;
-    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-    white-space: nowrap;
-  }
-
-  #toast.show { transform: translateX(-50%) translateY(0); }
-
-  /* Responsive collapse panel */
-  #toggle-panel {
-    display: none;
-    position: absolute;
-    left: 16px; top: 16px;
-    z-index: 900;
-    width: 40px; height: 40px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    font-size: 18px;
-    cursor: pointer;
-    align-items: center;
-    justify-content: center;
-    color: var(--text);
-  }
-
-  @media (max-width: 640px) {
-    #toggle-panel { display: flex; }
-    #panel { position: absolute; left: 0; top: 0; transform: translateX(-100%); transition: transform 0.3s; }
-    #panel.open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,0.5); }
-    #map { width: 100vw; }
-  }
-
-  /* no-route placeholder */
-  .placeholder-msg {
-    text-align: center;
-    color: var(--text-dim);
-    font-size: 12px;
-    padding: 16px;
-    font-family: 'Space Mono', monospace;
-    line-height: 1.6;
+  #tabs { display:flex; border-bottom:1px solid var(--border); }
+  .tab { flex:1; padding:12px 8px; font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; background:transparent; border:none; color:var(--text-dim); cursor:pointer; transition:all 0.2s; font-family:'Space Mono',monospace; }
+  .tab.active { color:var(--accent); background:rgba(0,255,136,0.06); border-bottom:2px solid var(--accent); }
+  .tab:hover:not(.active) { color:var(--text); background:rgba(255,255,255,0.03); }
+  .tab-content { display:none; flex:1; flex-direction:column; overflow:hidden; }
+  .tab-content.active { display:flex; }
+
+  /* FORM */
+  .field-label { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); font-family:'Space Mono',monospace; margin-bottom:5px; }
+  .input-group { position:relative; }
+  .dot { width:8px; height:8px; border-radius:50%; position:absolute; left:12px; top:50%; transform:translateY(-50%); z-index:1; }
+  .dot.green { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .dot.red { background:var(--accent3); box-shadow:0 0 8px var(--accent3); }
+  .nav-input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:11px 12px 11px 32px; font-size:13px; color:var(--text); font-family:'Syne',sans-serif; outline:none; transition:border-color 0.2s,box-shadow 0.2s; }
+  .nav-input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,255,136,0.12); }
+  .nav-input::placeholder { color:var(--text-dim); }
+
+  /* AUTOCOMPLETE */
+  .autocomplete-list { position:absolute; top:calc(100% + 4px); left:0; right:0; background:var(--surface2); border:1px solid var(--border); border-radius:8px; z-index:9999; max-height:200px; overflow-y:auto; display:none; }
+  .autocomplete-list.show { display:block; }
+  .ac-item { padding:10px 14px; font-size:12px; cursor:pointer; border-bottom:1px solid var(--border); line-height:1.4; }
+  .ac-item:last-child { border-bottom:none; }
+  .ac-item:hover { background:rgba(0,255,136,0.07); }
+  .ac-item .ac-main { color:var(--text); font-weight:600; }
+  .ac-item .ac-sub { color:var(--text-dim); font-size:10px; margin-top:2px; }
+
+  /* MODE */
+  .mode-selector { display:flex; gap:6px; }
+  .mode-btn { flex:1; padding:8px 6px; font-size:11px; font-weight:700; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text-dim); cursor:pointer; transition:all 0.2s; font-family:'Space Mono',monospace; display:flex; align-items:center; justify-content:center; gap:4px; }
+  .mode-btn.active { background:rgba(0,136,255,0.12); border-color:var(--accent2); color:var(--accent2); }
+
+  /* BUTTONS */
+  .btn-primary { width:100%; padding:13px; background:var(--accent); border:none; border-radius:8px; color:#000; font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase; cursor:pointer; font-family:'Syne',sans-serif; transition:opacity 0.2s,transform 0.1s; }
+  .btn-primary:hover { opacity:0.88; transform:translateY(-1px); }
+  .btn-start { width:100%; padding:13px; background:var(--accent2); border:none; border-radius:8px; color:#fff; font-size:13px; font-weight:800; letter-spacing:1px; text-transform:uppercase; cursor:pointer; font-family:'Syne',sans-serif; transition:opacity 0.2s,transform 0.1s; display:none; }
+  .btn-start.show { display:block; }
+  .btn-start:hover { opacity:0.88; transform:translateY(-1px); }
+  .btn-secondary { width:100%; padding:10px; background:transparent; border:1px solid var(--border); border-radius:8px; color:var(--text-dim); font-size:12px; font-weight:600; cursor:pointer; font-family:'Syne',sans-serif; transition:all 0.2s; }
+  .btn-secondary:hover { border-color:var(--accent3); color:var(--accent3); }
+
+  /* ROUTE INFO */
+  #route-info { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px; display:none; gap:12px; }
+  #route-info.show { display:flex; flex-direction:column; }
+  .route-stats { display:flex; gap:10px; }
+  .stat-box { flex:1; background:var(--bg); border-radius:8px; padding:10px; text-align:center; }
+  .stat-val { font-size:20px; font-weight:800; color:var(--accent); font-family:'Space Mono',monospace; line-height:1; }
+  .stat-unit { font-size:10px; color:var(--text-dim); margin-top:3px; letter-spacing:1px; text-transform:uppercase; }
+
+  /* TURN-BY-TURN NAV BANNER */
+  #nav-banner { display:none; position:absolute; top:0; left:var(--panel-w); right:0; z-index:900; background:var(--accent2); color:#fff; padding:14px 20px; font-size:14px; font-weight:700; align-items:center; gap:12px; }
+  #nav-banner.show { display:flex; }
+  #nav-banner .nav-icon { font-size:22px; }
+  #nav-banner .nav-instruction { flex:1; line-height:1.3; }
+  #nav-banner .nav-dist { font-family:'Space Mono',monospace; font-size:12px; opacity:0.85; }
+  #nav-banner .nav-close { background:rgba(255,255,255,0.2); border:none; border-radius:6px; color:#fff; padding:6px 10px; cursor:pointer; font-size:12px; font-family:'Space Mono',monospace; font-weight:700; }
+
+  /* STEPS */
+  #steps-list { max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+  .step-item { display:flex; align-items:flex-start; gap:10px; padding:8px 10px; background:var(--bg); border-radius:6px; font-size:11px; line-height:1.4; cursor:pointer; transition:background 0.15s; }
+  .step-item:hover { background:rgba(0,136,255,0.08); }
+  .step-item.active-step { background:rgba(0,136,255,0.18); border-left:3px solid var(--accent2); }
+  .step-icon { font-size:14px; flex-shrink:0; margin-top:1px; }
+  .step-text { color:var(--text-dim); }
+  .step-dist { font-family:'Space Mono',monospace; color:var(--accent2); font-size:10px; margin-top:2px; }
+
+  /* SEARCH */
+  #search-results { display:flex; flex-direction:column; gap:6px; }
+  .result-card { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; cursor:pointer; transition:all 0.2s; }
+  .result-card:hover { border-color:var(--accent2); background:rgba(0,136,255,0.05); }
+  .result-card .r-name { font-size:13px; font-weight:700; }
+  .result-card .r-addr { font-size:11px; color:var(--text-dim); margin-top:3px; }
+  .result-card .r-type { font-size:9px; color:var(--accent2); letter-spacing:2px; text-transform:uppercase; font-family:'Space Mono',monospace; margin-bottom:4px; }
+
+  /* HISTORY */
+  .history-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:10px; margin-bottom:5px; }
+  .history-card:hover { border-color:var(--accent); background:rgba(0,255,136,0.04); }
+  .history-icon { font-size:14px; flex-shrink:0; }
+  .history-info { flex:1; min-width:0; }
+  .history-name { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .history-addr { font-size:10px; color:var(--text-dim); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .history-time { font-size:9px; color:var(--text-dim); font-family:'Space Mono',monospace; flex-shrink:0; }
+
+  /* LOCATION */
+  .location-card { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .coord-row { display:flex; justify-content:space-between; align-items:center; padding:8px 10px; background:var(--bg); border-radius:6px; }
+  .coord-label { font-size:10px; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase; font-family:'Space Mono',monospace; }
+  .coord-val { font-size:13px; font-family:'Space Mono',monospace; color:var(--accent); }
+
+  /* STATUS */
+  #status-bar { padding:8px 16px; background:var(--bg); border-top:1px solid var(--border); font-size:10px; font-family:'Space Mono',monospace; color:var(--text-dim); letter-spacing:1px; display:flex; align-items:center; gap:8px; }
+  .status-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent); flex-shrink:0; animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* MAP */
+  #map { flex:1; height:100vh; }
+  #map-controls { position:absolute; right:16px; bottom:100px; z-index:800; display:flex; flex-direction:column; gap:8px; }
+  .map-btn { width:44px; height:44px; background:var(--surface); border:1px solid var(--border); border-radius:10px; color:var(--text); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; }
+  .map-btn:hover { border-color:var(--accent); color:var(--accent); }
+  #tile-switcher { position:absolute; right:70px; bottom:40px; z-index:800; display:flex; gap:6px; }
+  .tile-btn { padding:6px 12px; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; background:var(--surface); border:1px solid var(--border); border-radius:20px; color:var(--text-dim); cursor:pointer; transition:all 0.2s; font-family:'Space Mono',monospace; }
+  .tile-btn.active { background:rgba(0,255,136,0.1); border-color:var(--accent); color:var(--accent); }
+  .my-location-marker { width:16px; height:16px; background:var(--accent2); border:3px solid white; border-radius:50%; box-shadow:0 0 0 4px rgba(0,136,255,0.3); animation:locPulse 2s ease-in-out infinite; }
+  @keyframes locPulse { 0%,100%{box-shadow:0 0 0 4px rgba(0,136,255,0.3)} 50%{box-shadow:0 0 0 10px rgba(0,136,255,0)} }
+
+  /* POPUP */
+  .leaflet-popup-content-wrapper { background:var(--surface)!important; color:var(--text)!important; border:1px solid var(--border)!important; border-radius:10px!important; box-shadow:0 8px 32px rgba(0,0,0,0.5)!important; }
+  .leaflet-popup-tip { background:var(--surface)!important; }
+  .popup-body { font-family:'Syne',sans-serif; font-size:13px; }
+  .popup-title { font-weight:700; margin-bottom:4px; }
+  .popup-coords { font-family:'Space Mono',monospace; font-size:10px; color:var(--text-dim); }
+  .popup-btn { display:inline-block; margin-top:8px; padding:5px 12px; background:var(--accent); color:#000; font-size:11px; font-weight:700; border-radius:6px; cursor:pointer; font-family:'Syne',sans-serif; border:none; }
+
+  /* MISC */
+  .divider { height:1px; background:var(--border); margin:2px 0; flex-shrink:0; }
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+  #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(60px); background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:10px 20px; border-radius:30px; font-size:12px; font-family:'Space Mono',monospace; z-index:9999; transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1); white-space:nowrap; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+  .placeholder-msg { text-align:center; color:var(--text-dim); font-size:12px; padding:16px; font-family:'Space Mono',monospace; line-height:1.6; }
+  #toggle-panel { display:none; position:absolute; left:16px; top:16px; z-index:900; width:40px; height:40px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:18px; cursor:pointer; align-items:center; justify-content:center; color:var(--text); }
+  @media(max-width:640px) {
+    #toggle-panel { display:flex; }
+    #panel { position:absolute; left:0; top:0; transform:translateX(-100%); transition:transform 0.3s; }
+    #panel.open { transform:translateX(0); box-shadow:4px 0 20px rgba(0,0,0,0.5); }
+    #map { width:100vw; }
+    #nav-banner { left:0; }
   }
 </style>
 </head>
 <body>
 
-<!-- Toggle (mobile) -->
 <button id="toggle-panel" onclick="togglePanel()">☰</button>
 
-<!-- SIDE PANEL -->
+<!-- TURN-BY-TURN BANNER -->
+<div id="nav-banner">
+  <div class="nav-icon" id="banner-icon">⬆️</div>
+  <div class="nav-instruction">
+    <div id="banner-text">Head forward</div>
+    <div class="nav-dist" id="banner-dist"></div>
+  </div>
+  <button class="nav-close" onclick="stopNavigation()">✕ End</button>
+</div>
+
+<!-- PANEL -->
 <div id="panel">
   <div id="panel-header">
-    <div class="logo">◈ NAV SYS</div>
-    <h1>Navigator</h1>
+    <div class="logo">◈ MY EVE</div>
+    <h1>myEve navigation</h1>
   </div>
 
-  <!-- TABS -->
   <div id="tabs">
-    <button class="tab active" onclick="switchTab('nav')">🧭 นำทาง</button>
-    <button class="tab" onclick="switchTab('search')">🔍 ค้นหา</button>
-    <button class="tab" onclick="switchTab('location')">📍 ตำแหน่ง</button>
+    <button class="tab active" onclick="switchTab('nav')">🧭 Navigate</button>
+    <button class="tab" onclick="switchTab('search')">🔍 Search</button>
+    <button class="tab" onclick="switchTab('location')">📍 Location</button>
   </div>
 
-  <!-- ── TAB: NAVIGATE ── -->
-  <div id="tab-nav" class="tab-content active" id="nav-content">
-    <div style="padding:16px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
+  <!-- TAB: NAVIGATE -->
+  <div id="tab-nav" class="tab-content active">
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;">
 
       <div>
-        <div class="field-label">จุดเริ่มต้น</div>
+        <div class="field-label">Origin</div>
         <div class="input-group">
           <span class="dot green"></span>
-          <input class="nav-input" id="origin-input" placeholder="ค้นหาหรือคลิกแผนที่..." autocomplete="off"
+          <input class="nav-input" id="origin-input" placeholder="Search or click map..." autocomplete="off"
             oninput="onInputChange(this,'origin-ac')" onfocus="onInputChange(this,'origin-ac')" onblur="delayHide('origin-ac')">
           <div class="autocomplete-list" id="origin-ac"></div>
         </div>
       </div>
 
       <div>
-        <div class="field-label">จุดหมาย</div>
+        <div class="field-label">Destination</div>
         <div class="input-group">
           <span class="dot red"></span>
-          <input class="nav-input" id="dest-input" placeholder="ค้นหาหรือคลิกแผนที่..." autocomplete="off"
+          <input class="nav-input" id="dest-input" placeholder="Search or click map..." autocomplete="off"
             oninput="onInputChange(this,'dest-ac')" onfocus="onInputChange(this,'dest-ac')" onblur="delayHide('dest-ac')">
           <div class="autocomplete-list" id="dest-ac"></div>
         </div>
       </div>
 
       <div>
-        <div class="field-label">โหมดการเดินทาง</div>
+        <div class="field-label">Travel Mode</div>
         <div class="mode-selector">
-          <button class="mode-btn active" data-mode="car" onclick="setMode(this)">🚗 รถ</button>
-          <button class="mode-btn" data-mode="bike" onclick="setMode(this)">🚴 จักรยาน</button>
-          <button class="mode-btn" data-mode="foot" onclick="setMode(this)">🚶 เดิน</button>
+          <button class="mode-btn active" data-mode="car" onclick="setMode(this)">🚗 Car</button>
+          <button class="mode-btn" data-mode="bike" onclick="setMode(this)">🚴 Bike</button>
+          <button class="mode-btn" data-mode="foot" onclick="setMode(this)">🚶 Walk</button>
         </div>
       </div>
 
-      <button class="btn-primary" onclick="calcRoute()">⬈ คำนวณเส้นทาง</button>
-      <button class="btn-secondary" onclick="useMyLocation()">📍 ใช้ตำแหน่งของฉันเป็นจุดเริ่ม</button>
+      <button class="btn-primary" onclick="calcRoute()">⬈ Get Directions</button>
+      <button class="btn-start" id="btn-start-nav" onclick="startNavigation()">▶ Start Navigation</button>
+      <button class="btn-secondary" onclick="useMyLocation()">📍 Use My Location as Start</button>
 
       <div class="divider"></div>
 
-      <!-- Route Info -->
       <div id="route-info">
         <div class="route-stats">
           <div class="stat-box">
             <div class="stat-val" id="stat-dist">-</div>
-            <div class="stat-unit">กิโลเมตร</div>
+            <div class="stat-unit">Kilometers</div>
           </div>
           <div class="stat-box">
             <div class="stat-val" id="stat-time">-</div>
-            <div class="stat-unit">นาที</div>
+            <div class="stat-unit">Minutes</div>
           </div>
         </div>
         <div id="steps-list"></div>
-        <button class="btn-secondary" onclick="clearRoute()" style="margin-top:4px;">✕ ล้างเส้นทาง</button>
+        <button class="btn-secondary" onclick="clearRoute()" style="margin-top:4px;">✕ Clear Route</button>
       </div>
 
       <div id="no-route" class="placeholder-msg">
-        ป้อนจุดเริ่มต้นและปลายทาง<br>หรือคลิกแผนที่เพื่อเลือก
+        🖱️ Click the map to select points<br>or type a place name above
       </div>
 
     </div>
   </div>
 
-  <!-- ── TAB: SEARCH ── -->
+  <!-- TAB: SEARCH -->
   <div id="tab-search" class="tab-content">
-    <div style="padding:16px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;">
       <div>
-        <div class="field-label">ค้นหาสถานที่</div>
+        <div class="field-label">Search Places</div>
         <div class="input-group">
-          <input class="nav-input" id="search-input" style="padding-left:14px" placeholder="ร้านอาหาร, โรงพยาบาล, ธนาคาร..."
+          <input class="nav-input" id="search-input" style="padding-left:14px" placeholder="Restaurant, Hospital, Bank..."
             autocomplete="off" onkeydown="if(event.key==='Enter') doSearch()">
         </div>
       </div>
-      <button class="btn-primary" onclick="doSearch()">🔍 ค้นหา</button>
+      <button class="btn-primary" onclick="doSearch()">🔍 Search</button>
       <div id="search-results">
-        <div class="placeholder-msg">กรอกชื่อสถานที่แล้วกด ค้นหา</div>
+        <div class="placeholder-msg">Type a place name and press Search</div>
+      </div>
+      <div id="history-section" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;margin-top:4px;">
+          <div class="field-label" style="margin:0">📋 Recent Searches</div>
+          <button onclick="clearHistory()" style="background:none;border:none;color:var(--accent3);font-size:10px;font-family:'Space Mono',monospace;cursor:pointer;letter-spacing:1px;">✕ CLEAR</button>
+        </div>
+        <div id="history-list"></div>
       </div>
     </div>
   </div>
 
-  <!-- ── TAB: LOCATION ── -->
+  <!-- TAB: LOCATION -->
   <div id="tab-location" class="tab-content">
-    <div style="padding:16px; display:flex; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
-      <button class="btn-primary" onclick="getMyLocation()">📡 ระบุตำแหน่งปัจจุบัน</button>
-
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;">
+      <button class="btn-primary" onclick="getMyLocation()">📡 Detect My Location</button>
       <div class="location-card" id="location-card" style="display:none">
-        <div class="field-label">ตำแหน่งของคุณ</div>
-        <div class="coord-row">
-          <span class="coord-label">LAT</span>
-          <span class="coord-val" id="my-lat">-</span>
-        </div>
-        <div class="coord-row">
-          <span class="coord-label">LNG</span>
-          <span class="coord-val" id="my-lng">-</span>
-        </div>
-        <div class="coord-row">
-          <span class="coord-label">ACCURACY</span>
-          <span class="coord-val" id="my-acc">-</span>
-        </div>
-        <button class="btn-secondary" onclick="copyCoords()">📋 คัดลอกพิกัด</button>
-        <button class="btn-secondary" onclick="goToMyLocation()">🗺️ ไปที่ตำแหน่งบนแผนที่</button>
+        <div class="field-label">Your Location</div>
+        <div class="coord-row"><span class="coord-label">LAT</span><span class="coord-val" id="my-lat">-</span></div>
+        <div class="coord-row"><span class="coord-label">LNG</span><span class="coord-val" id="my-lng">-</span></div>
+        <div class="coord-row"><span class="coord-label">ACCURACY</span><span class="coord-val" id="my-acc">-</span></div>
+        <button class="btn-secondary" onclick="copyCoords()">📋 Copy Coordinates</button>
+        <button class="btn-secondary" onclick="goToMyLocation()">🗺️ Go to My Location</button>
       </div>
-
-      <div class="placeholder-msg" id="loc-placeholder">กดปุ่มเพื่อขอสิทธิ์เข้าถึงตำแหน่ง</div>
+      <div class="placeholder-msg" id="loc-placeholder">Press the button to access your location</div>
     </div>
   </div>
 
-  <!-- STATUS -->
   <div id="status-bar">
     <div class="status-dot"></div>
-    <span id="status-text">OpenStreetMap · พร้อมใช้งาน</span>
+    <span id="status-text">OpenStreetMap · Ready</span>
   </div>
 </div>
 
-<!-- MAP -->
 <div id="map"></div>
 
-<!-- Map Controls -->
 <div id="map-controls">
-  <button class="map-btn" onclick="zoomIn()" title="ซูมเข้า">+</button>
-  <button class="map-btn" onclick="zoomOut()" title="ซูมออก">−</button>
-  <button class="map-btn" onclick="getMyLocation();goToMyLocation()" title="ตำแหน่งฉัน">◎</button>
+  <button class="map-btn" onclick="zoomIn()" title="Zoom In">+</button>
+  <button class="map-btn" onclick="zoomOut()" title="Zoom Out">−</button>
+  <button class="map-btn" onclick="getMyLocation();goToMyLocation()" title="My Location">◎</button>
 </div>
 
-<!-- Tile Switcher -->
 <div id="tile-switcher">
-  <button class="tile-btn active" onclick="switchTile('street',this)">ถนน</button>
-  <button class="tile-btn" onclick="switchTile('topo',this)">ภูมิประเทศ</button>
-  <button class="tile-btn" onclick="switchTile('satellite',this)">ดาวเทียม</button>
+  <button class="tile-btn active" onclick="switchTile('street',this)">Street</button>
+  <button class="tile-btn" onclick="switchTile('topo',this)">Terrain</button>
+  <button class="tile-btn" onclick="switchTile('satellite',this)">Satellite</button>
 </div>
 
-<!-- Toast -->
 <div id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-
-// ─── STATE ───────────────────────────────────────────────
 var map, tileLayer;
 var originMarker = null, destMarker = null, myMarker = null;
 var routeLayer = null;
 var originCoords = null, destCoords = null, myCoords = null;
 var travelMode = 'car';
-var clickMode = null; // 'origin' | 'dest' | null
 var acTimeout = null;
+var routeSteps = [];
+var currentStep = 0;
+var navActive = false;
+var navWatchId = null;
 
-// ─── TILE CONFIGS ────────────────────────────────────────
 var tiles = {
   street: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  topo:   'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+  topo: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
   satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 };
-
 var tileAttribs = {
   street: '© OpenStreetMap contributors',
   topo: '© OpenStreetMap & OpenTopoMap',
   satellite: '© Esri, USGS, NOAA'
 };
 
-// ─── INIT MAP ─────────────────────────────────────────────
 function initMap() {
-  map = L.map('map', {
-    center: [13.7563, 100.5018],
-    zoom: 13,
-    zoomControl: false,
-    attributionControl: true
-  });
-
-  tileLayer = L.tileLayer(tiles.street, {
-    attribution: tileAttribs.street,
-    maxZoom: 19
-  }).addTo(map);
-
+  map = L.map('map', { center:[13.7563,100.5018], zoom:13, zoomControl:false, attributionControl:true });
+  tileLayer = L.tileLayer(tiles.street, { attribution:tileAttribs.street, maxZoom:19 }).addTo(map);
   map.on('click', onMapClick);
 }
 
 function onMapClick(e) {
   var lat = e.latlng.lat, lng = e.latlng.lng;
-
-  if (clickMode === 'origin') {
-    setOriginPoint(lat, lng);
-    clickMode = null;
-    toast('ตั้งจุดเริ่มต้นแล้ว');
-  } else if (clickMode === 'dest') {
-    setDestPoint(lat, lng);
-    clickMode = null;
-    toast('ตั้งจุดหมายแล้ว');
-  } else {
-    // Show popup with options
-    var popup = L.popup({ className: '' })
-      .setLatLng(e.latlng)
-      .setContent(
-        '<div class="popup-body">' +
-        '<div class="popup-title">📍 ตำแหน่งที่เลือก</div>' +
-        '<div class="popup-coords">' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</div>' +
-        '<button class="popup-btn" onclick="setOriginFromPopup(' + lat + ',' + lng + ')">→ จุดเริ่มต้น</button>' +
-        ' <button class="popup-btn" style="background:#ff4466" onclick="setDestFromPopup(' + lat + ',' + lng + ')">→ จุดหมาย</button>' +
-        '</div>'
-      )
-      .openOn(map);
-  }
+  L.popup()
+    .setLatLng(e.latlng)
+    .setContent(
+      '<div class="popup-body">' +
+      '<div class="popup-title">📍 Selected Location</div>' +
+      '<div class="popup-coords">' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</div>' +
+      '<button class="popup-btn" onclick="setOriginFromPopup(' + lat + ',' + lng + ')">→ Set as Origin</button>' +
+      ' <button class="popup-btn" style="background:#ff4466" onclick="setDestFromPopup(' + lat + ',' + lng + ')">→ Set as Dest</button>' +
+      '</div>'
+    ).openOn(map);
 }
 
-function setOriginFromPopup(lat, lng) {
-  setOriginPoint(lat, lng);
-  map.closePopup();
-}
+function setOriginFromPopup(lat, lng) { setOriginPoint(lat, lng); map.closePopup(); }
+function setDestFromPopup(lat, lng) { setDestPoint(lat, lng); map.closePopup(); }
 
-function setDestFromPopup(lat, lng) {
-  setDestPoint(lat, lng);
-  map.closePopup();
-}
-
-// ─── MARKERS ─────────────────────────────────────────────
 function makeIcon(color) {
   return L.divIcon({
     html: '<div style="width:14px;height:14px;background:' + color + ';border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.4)"></div>',
-    className: '',
-    iconSize: [14,14],
-    iconAnchor: [7,7]
+    className:'', iconSize:[14,14], iconAnchor:[7,7]
   });
 }
 
 function setOriginPoint(lat, lng) {
   originCoords = [lat, lng];
   if (originMarker) map.removeLayer(originMarker);
-  originMarker = L.marker([lat, lng], { icon: makeIcon('#00ff88') })
-    .bindTooltip('จุดเริ่มต้น', { permanent: false })
-    .addTo(map);
-  reverseGeocode(lat, lng, function(name) {
-    document.getElementById('origin-input').value = name;
-  });
+  originMarker = L.marker([lat,lng], {icon:makeIcon('#00ff88')}).bindTooltip('Origin').addTo(map);
+  reverseGeocode(lat, lng, function(name) { document.getElementById('origin-input').value = name; });
 }
 
 function setDestPoint(lat, lng) {
   destCoords = [lat, lng];
   if (destMarker) map.removeLayer(destMarker);
-  destMarker = L.marker([lat, lng], { icon: makeIcon('#ff4466') })
-    .bindTooltip('จุดหมาย', { permanent: false })
-    .addTo(map);
-  reverseGeocode(lat, lng, function(name) {
-    document.getElementById('dest-input').value = name;
-  });
+  destMarker = L.marker([lat,lng], {icon:makeIcon('#ff4466')}).bindTooltip('Destination').addTo(map);
+  reverseGeocode(lat, lng, function(name) { document.getElementById('dest-input').value = name; });
 }
 
-// ─── GEOCODING ───────────────────────────────────────────
 function geocode(query, callback) {
-  var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=5&accept-language=th';
-  fetch(url, { headers: { 'Accept-Language': 'th' } })
-    .then(function(r) { return r.json(); })
-    .then(function(data) { callback(data); })
-    .catch(function() { callback([]); });
+  var url = 'https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(query) + '&limit=5&accept-language=en';
+  fetch(url, {headers:{'Accept-Language':'en'}})
+    .then(function(r){return r.json();})
+    .then(function(data){callback(data);})
+    .catch(function(){callback([]);});
 }
 
 function reverseGeocode(lat, lng, callback) {
-  var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&accept-language=th';
+  var url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&accept-language=en';
   fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      var name = d.display_name ? d.display_name.split(',').slice(0,2).join(', ') : (lat.toFixed(4) + ', ' + lng.toFixed(4));
+    .then(function(r){return r.json();})
+    .then(function(d){
+      var name = d.display_name ? d.display_name.split(',').slice(0,2).join(', ') : (lat.toFixed(4)+', '+lng.toFixed(4));
       callback(name);
     })
-    .catch(function() { callback(lat.toFixed(4) + ', ' + lng.toFixed(4)); });
+    .catch(function(){callback(lat.toFixed(4)+', '+lng.toFixed(4));});
 }
 
-// ─── AUTOCOMPLETE ─────────────────────────────────────────
 function onInputChange(input, acId) {
   clearTimeout(acTimeout);
   var q = input.value.trim();
   if (q.length < 2) { hideAc(acId); return; }
   acTimeout = setTimeout(function() {
-    setStatus('กำลังค้นหา...');
+    setStatus('Searching...');
     geocode(q, function(results) {
-      showAc(acId, results, input, acId === 'origin-ac' ? 'origin' : 'dest');
-      setStatus('OpenStreetMap · พร้อมใช้งาน');
+      showAc(acId, results, acId === 'origin-ac' ? 'origin' : 'dest');
+      setStatus('OpenStreetMap · Ready');
     });
   }, 500);
 }
 
-function showAc(acId, results, input, type) {
+function showAc(acId, results, type) {
   var el = document.getElementById(acId);
-  if (!results.length) { el.innerHTML = '<div class="ac-item"><div class="ac-main" style="color:var(--text-dim)">ไม่พบสถานที่</div></div>'; el.classList.add('show'); return; }
+  if (!results.length) {
+    el.innerHTML = '<div class="ac-item"><div class="ac-main" style="color:var(--text-dim)">No places found</div></div>';
+    el.classList.add('show'); return;
+  }
   el.innerHTML = results.map(function(r) {
     var parts = r.display_name.split(', ');
-    var main = parts[0];
-    var sub = parts.slice(1,3).join(', ');
     return '<div class="ac-item" onmousedown="selectAc(' + r.lat + ',' + r.lon + ',\'' + escJs(r.display_name) + '\',\'' + type + '\')">' +
-      '<div class="ac-main">' + main + '</div>' +
-      '<div class="ac-sub">' + sub + '</div>' +
-      '</div>';
+      '<div class="ac-main">' + parts[0] + '</div>' +
+      '<div class="ac-sub">' + parts.slice(1,3).join(', ') + '</div></div>';
   }).join('');
   el.classList.add('show');
 }
@@ -857,29 +429,21 @@ function selectAc(lat, lng, name, type) {
   lat = parseFloat(lat); lng = parseFloat(lng);
   if (type === 'origin') {
     document.getElementById('origin-input').value = name.split(',').slice(0,2).join(', ');
-    setOriginPoint(lat, lng);
-    map.setView([lat, lng], 14);
+    setOriginPoint(lat, lng); map.setView([lat,lng], 14);
   } else {
     document.getElementById('dest-input').value = name.split(',').slice(0,2).join(', ');
-    setDestPoint(lat, lng);
-    map.setView([lat, lng], 14);
+    setDestPoint(lat, lng); map.setView([lat,lng], 14);
   }
 }
 
-function hideAc(id) { var el = document.getElementById(id); if(el) el.classList.remove('show'); }
-function delayHide(id) { setTimeout(function() { hideAc(id); }, 200); }
+function hideAc(id) { var el=document.getElementById(id); if(el) el.classList.remove('show'); }
+function delayHide(id) { setTimeout(function(){hideAc(id);}, 200); }
+function escJs(s) { return s.replace(/'/g,"\\'").replace(/"/g,'\\"'); }
 
-function escJs(s) { return s.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
-
-// ─── ROUTING ─────────────────────────────────────────────
 function calcRoute() {
-  if (!originCoords || !destCoords) {
-    toast('⚠️ กรุณาระบุจุดเริ่มต้นและปลายทาง');
-    return;
-  }
-
+  if (!originCoords || !destCoords) { toast('⚠️ Please set origin and destination'); return; }
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
-  setStatus('กำลังคำนวณเส้นทาง...');
+  setStatus('Calculating route...');
 
   var profile = travelMode === 'car' ? 'driving' : travelMode === 'bike' ? 'cycling' : 'walking';
   var url = 'https://router.project-osrm.org/route/v1/' + profile + '/' +
@@ -888,46 +452,61 @@ function calcRoute() {
     '?overview=full&geometries=geojson&steps=true';
 
   fetch(url)
-    .then(function(r) { return r.json(); })
+    .then(function(r){return r.json();})
     .then(function(data) {
       if (data.code !== 'Ok' || !data.routes.length) {
-        toast('❌ ไม่พบเส้นทาง'); setStatus('ไม่พบเส้นทาง'); return;
+        toast('❌ No route found'); setStatus('No route found'); return;
       }
       var route = data.routes[0];
-      var dist = (route.distance / 1000).toFixed(1);
-      var time = Math.round(route.duration / 60);
+      var dist = (route.distance/1000).toFixed(1);
+      var time = Math.round(route.duration/60);
 
-      // Draw route
       routeLayer = L.geoJSON(route.geometry, {
-        style: { color: '#0088ff', weight: 5, opacity: 0.85 }
+        style:{color:'#0088ff', weight:5, opacity:0.85}
       }).addTo(map);
+      map.fitBounds(routeLayer.getBounds(), {padding:[40,40]});
 
-      // Fit bounds
-      map.fitBounds(routeLayer.getBounds(), { padding: [40, 40] });
-
-      // Stats
       document.getElementById('stat-dist').textContent = dist;
       document.getElementById('stat-time').textContent = time;
       document.getElementById('route-info').classList.add('show');
       document.getElementById('no-route').style.display = 'none';
 
-      // Steps
-      var steps = route.legs[0].steps;
-      var html = steps.slice(0, 12).map(function(s) {
-        var icon = getStepIcon(s.maneuver.type, s.maneuver.modifier);
-        var dist2 = s.distance > 1000 ? (s.distance/1000).toFixed(1) + ' km' : Math.round(s.distance) + ' ม.';
-        return '<div class="step-item"><div class="step-icon">' + icon + '</div>' +
-          '<div><div class="step-text">' + (s.name || 'ดำเนินต่อ') + '</div>' +
-          '<div class="step-dist">' + dist2 + '</div></div></div>';
-      }).join('');
-      document.getElementById('steps-list').innerHTML = html;
+      routeSteps = route.legs[0].steps;
+      renderSteps(routeSteps);
 
-      setStatus('เส้นทาง ' + dist + ' กม. · ' + time + ' นาที');
-      toast('✅ พบเส้นทาง ' + dist + ' กม.');
+      document.getElementById('btn-start-nav').classList.add('show');
+      setStatus('Route: ' + dist + ' km · ' + time + ' min');
+      toast('✅ Route found: ' + dist + ' km — press Start Navigation!');
     })
-    .catch(function(err) {
-      toast('❌ เกิดข้อผิดพลาด'); setStatus('เกิดข้อผิดพลาด');
-    });
+    .catch(function() { toast('❌ An error occurred'); setStatus('Error'); });
+}
+
+function renderSteps(steps) {
+  var html = steps.slice(0,15).map(function(s, i) {
+    var icon = getStepIcon(s.maneuver.type, s.maneuver.modifier);
+    var dist2 = s.distance > 1000 ? (s.distance/1000).toFixed(1)+' km' : Math.round(s.distance)+' m';
+    return '<div class="step-item" id="step-'+i+'" onclick="jumpToStep('+i+')">' +
+      '<div class="step-icon">' + icon + '</div>' +
+      '<div><div class="step-text">' + (s.name || 'Continue') + '</div>' +
+      '<div class="step-dist">' + dist2 + '</div></div></div>';
+  }).join('');
+  document.getElementById('steps-list').innerHTML = html;
+}
+
+function jumpToStep(i) {
+  currentStep = i;
+  highlightStep(i);
+  if (routeSteps[i] && routeSteps[i].maneuver) {
+    var loc = routeSteps[i].maneuver.location;
+    map.setView([loc[1], loc[0]], 16);
+  }
+  updateBanner(i);
+}
+
+function highlightStep(i) {
+  document.querySelectorAll('.step-item').forEach(function(el) { el.classList.remove('active-step'); });
+  var el = document.getElementById('step-' + i);
+  if (el) { el.classList.add('active-step'); el.scrollIntoView({behavior:'smooth', block:'nearest'}); }
 }
 
 function getStepIcon(type, mod) {
@@ -944,151 +523,247 @@ function getStepIcon(type, mod) {
   return '⬆️';
 }
 
+// ── START NAVIGATION ──────────────────────────────────────
+function startNavigation() {
+  if (!routeSteps.length) { toast('⚠️ Calculate a route first'); return; }
+  navActive = true;
+  currentStep = 0;
+  document.getElementById('nav-banner').classList.add('show');
+  updateBanner(0);
+  highlightStep(0);
+  toast('▶ Navigation started!');
+  setStatus('Navigation active...');
+
+  if (navigator.geolocation) {
+    navWatchId = navigator.geolocation.watchPosition(function(pos) {
+      var lat = pos.coords.latitude, lng = pos.coords.longitude;
+      myCoords = [lat, lng];
+      if (myMarker) map.removeLayer(myMarker);
+      myMarker = L.marker([lat,lng], {
+        icon: L.divIcon({html:'<div class="my-location-marker"></div>', className:'', iconSize:[16,16], iconAnchor:[8,8]})
+      }).addTo(map);
+
+      // Auto-advance step if close enough
+      if (routeSteps[currentStep]) {
+        var stepLoc = routeSteps[currentStep].maneuver.location;
+        var d = haversine(lat, lng, stepLoc[1], stepLoc[0]);
+        if (d < 30 && currentStep < routeSteps.length - 1) {
+          currentStep++;
+          updateBanner(currentStep);
+          highlightStep(currentStep);
+        }
+      }
+    }, function(){}, {enableHighAccuracy:true});
+  }
+}
+
+function stopNavigation() {
+  navActive = false;
+  document.getElementById('nav-banner').classList.remove('show');
+  if (navWatchId !== null) { navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
+  setStatus('OpenStreetMap · Ready');
+  toast('Navigation ended');
+}
+
+function updateBanner(i) {
+  var step = routeSteps[i];
+  if (!step) return;
+  var icon = getStepIcon(step.maneuver.type, step.maneuver.modifier);
+  var dist2 = step.distance > 1000 ? (step.distance/1000).toFixed(1)+' km' : Math.round(step.distance)+' m';
+  document.getElementById('banner-icon').textContent = icon;
+  document.getElementById('banner-text').textContent = (step.name || 'Continue') + ' — Step ' + (i+1) + ' of ' + Math.min(routeSteps.length, 15);
+  document.getElementById('banner-dist').textContent = dist2 + ' ahead';
+}
+
+function haversine(lat1, lng1, lat2, lng2) {
+  var R = 6371000;
+  var dLat = (lat2-lat1)*Math.PI/180;
+  var dLng = (lng2-lng1)*Math.PI/180;
+  var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 function clearRoute() {
+  stopNavigation();
   if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
   if (originMarker) { map.removeLayer(originMarker); originMarker = null; }
   if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
-  originCoords = null; destCoords = null;
+  originCoords = null; destCoords = null; routeSteps = [];
   document.getElementById('origin-input').value = '';
   document.getElementById('dest-input').value = '';
   document.getElementById('route-info').classList.remove('show');
   document.getElementById('no-route').style.display = '';
-  setStatus('OpenStreetMap · พร้อมใช้งาน');
-  toast('ล้างเส้นทางแล้ว');
+  document.getElementById('btn-start-nav').classList.remove('show');
+  setStatus('OpenStreetMap · Ready');
+  toast('Route cleared');
 }
 
-// ─── SEARCH ──────────────────────────────────────────────
+// ── SEARCH ────────────────────────────────────────────────
 function doSearch() {
   var q = document.getElementById('search-input').value.trim();
-  if (!q) { toast('กรุณากรอกคำค้นหา'); return; }
-  setStatus('กำลังค้นหา: ' + q);
-
+  if (!q) { toast('Please enter a search term'); return; }
+  setStatus('Searching: ' + q);
   geocode(q, function(results) {
     var el = document.getElementById('search-results');
     if (!results.length) {
-      el.innerHTML = '<div class="placeholder-msg">ไม่พบสถานที่ที่ตรงกัน</div>';
-      setStatus('ไม่พบสถานที่');
-      return;
+      el.innerHTML = '<div class="placeholder-msg">No matching places found</div>';
+      setStatus('No places found'); return;
     }
-
-    // Clear old search markers (simple: just remove all from a layer group or track them)
-    el.innerHTML = results.map(function(r, i) {
+    var typeMap = {amenity:'Amenity', tourism:'Tourism', shop:'Shop', highway:'Road', place:'Place'};
+    el.innerHTML = results.map(function(r) {
       var parts = r.display_name.split(', ');
-      var typeMap = { amenity: 'สถานบริการ', tourism: 'ท่องเที่ยว', shop: 'ร้านค้า', highway: 'ถนน', place: 'สถานที่' };
-      var type2 = typeMap[r.type] || r.class || r.type || '';
+      var type2 = typeMap[r.type] || r.class || '';
       return '<div class="result-card" onclick="jumpToResult(' + r.lat + ',' + r.lon + ',\'' + escJs(r.display_name) + '\')">' +
-        (type2 ? '<div class="r-type">' + type2 + '</div>' : '') +
-        '<div class="r-name">' + parts[0] + '</div>' +
-        '<div class="r-addr">' + parts.slice(1,3).join(', ') + '</div>' +
-        '</div>';
+        (type2 ? '<div class="r-type">'+type2+'</div>' : '') +
+        '<div class="r-name">'+parts[0]+'</div>' +
+        '<div class="r-addr">'+parts.slice(1,3).join(', ')+'</div></div>';
     }).join('');
-
-    setStatus('พบ ' + results.length + ' สถานที่');
+    setStatus('Found ' + results.length + ' place(s)');
   });
 }
-
-var searchMarkers = [];
 
 function jumpToResult(lat, lng, name) {
   lat = parseFloat(lat); lng = parseFloat(lng);
-  map.setView([lat, lng], 16);
-
-  var m = L.marker([lat, lng], { icon: makeIcon('#ffcc00') })
-    .bindPopup('<div class="popup-body"><div class="popup-title">' + name.split(',')[0] + '</div>' +
-      '<button class="popup-btn" onclick="setOriginFromPopup(' + lat + ',' + lng + ')">→ จุดเริ่มต้น</button>' +
-      ' <button class="popup-btn" style="background:#ff4466" onclick="setDestFromPopup(' + lat + ',' + lng + ')">→ จุดหมาย</button>' +
-      '</div>')
-    .addTo(map)
-    .openPopup();
-  searchMarkers.push(m);
+  map.setView([lat,lng], 16);
+  L.marker([lat,lng], {icon:makeIcon('#ffcc00')})
+    .bindPopup('<div class="popup-body"><div class="popup-title">'+name.split(',')[0]+'</div>' +
+      '<button class="popup-btn" onclick="setOriginFromPopup('+lat+','+lng+')">→ Set as Origin</button>' +
+      ' <button class="popup-btn" style="background:#ff4466" onclick="setDestFromPopup('+lat+','+lng+')">→ Set as Dest</button></div>')
+    .addTo(map).openPopup();
+  saveHistory(lat, lng, name);
 }
 
-// ─── MY LOCATION ─────────────────────────────────────────
+// ── SEARCH HISTORY ────────────────────────────────────────
+var searchHistory = [];
+
+function saveHistory(lat, lng, name) {
+  var parts = name.split(', ');
+  var entry = { lat:lat, lng:lng, name:parts[0], addr:parts.slice(1,3).join(', '), time: Date.now() };
+  // Remove duplicate
+  searchHistory = searchHistory.filter(function(h){ return !(Math.abs(h.lat-lat)<0.0001 && Math.abs(h.lng-lng)<0.0001); });
+  searchHistory.unshift(entry);
+  if (searchHistory.length > 20) searchHistory = searchHistory.slice(0,20);
+  renderHistory();
+}
+
+function renderHistory() {
+  var sec = document.getElementById('history-section');
+  var list = document.getElementById('history-list');
+  if (!searchHistory.length) { sec.style.display='none'; return; }
+  sec.style.display = 'block';
+  list.innerHTML = searchHistory.map(function(h, i) {
+    var ago = timeAgo(h.time);
+    return '<div class="history-card" onclick="jumpToHistory('+i+')">' +
+      '<div class="history-icon">🕐</div>' +
+      '<div class="history-info">' +
+        '<div class="history-name">' + h.name + '</div>' +
+        '<div class="history-addr">' + (h.addr || '—') + '</div>' +
+      '</div>' +
+      '<div class="history-time">' + ago + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function jumpToHistory(i) {
+  var h = searchHistory[i];
+  if (!h) return;
+  map.setView([h.lat, h.lng], 16);
+  L.marker([h.lat, h.lng], {icon:makeIcon('#ffcc00')})
+    .bindPopup('<div class="popup-body"><div class="popup-title">'+h.name+'</div>' +
+      '<button class="popup-btn" onclick="setOriginFromPopup('+h.lat+','+h.lng+')">→ Set as Origin</button>' +
+      ' <button class="popup-btn" style="background:#ff4466" onclick="setDestFromPopup('+h.lat+','+h.lng+')">→ Set as Dest</button></div>')
+    .addTo(map).openPopup();
+  toast('📍 ' + h.name);
+}
+
+function clearHistory() {
+  searchHistory = [];
+  document.getElementById('history-section').style.display = 'none';
+  toast('History cleared');
+}
+
+function timeAgo(ts) {
+  var diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+// ── MY LOCATION ───────────────────────────────────────────
 function getMyLocation() {
-  if (!navigator.geolocation) { toast('เบราว์เซอร์ไม่รองรับ Geolocation'); return; }
-  setStatus('กำลังระบุตำแหน่ง...');
-
+  if (!navigator.geolocation) { toast('Geolocation not supported'); return; }
+  setStatus('Detecting location...');
   navigator.geolocation.getCurrentPosition(function(pos) {
-    var lat = pos.coords.latitude;
-    var lng = pos.coords.longitude;
-    var acc = Math.round(pos.coords.accuracy);
+    var lat = pos.coords.latitude, lng = pos.coords.longitude, acc = Math.round(pos.coords.accuracy);
     myCoords = [lat, lng];
-
     document.getElementById('my-lat').textContent = lat.toFixed(6);
     document.getElementById('my-lng').textContent = lng.toFixed(6);
-    document.getElementById('my-acc').textContent = '±' + acc + ' ม.';
+    document.getElementById('my-acc').textContent = '±' + acc + ' m';
     document.getElementById('location-card').style.display = 'flex';
     document.getElementById('loc-placeholder').style.display = 'none';
-
     if (myMarker) map.removeLayer(myMarker);
-    myMarker = L.marker([lat, lng], {
-      icon: L.divIcon({
-        html: '<div class="my-location-marker"></div>',
-        className: '',
-        iconSize: [16,16],
-        iconAnchor: [8,8]
-      })
-    }).bindTooltip('ตำแหน่งของฉัน', { permanent: false }).addTo(map);
-
-    map.setView([lat, lng], 15);
-    setStatus('พบตำแหน่ง ±' + acc + ' ม.');
-    toast('📍 พบตำแหน่งของคุณแล้ว');
+    myMarker = L.marker([lat,lng], {
+      icon: L.divIcon({html:'<div class="my-location-marker"></div>', className:'', iconSize:[16,16], iconAnchor:[8,8]})
+    }).bindTooltip('My Location').addTo(map);
+    map.setView([lat,lng], 15);
+    setStatus('Location found ±' + acc + ' m');
+    toast('📍 Location found!');
   }, function(err) {
-    var msgs = { 1: 'ไม่ได้รับอนุญาตเข้าถึงตำแหน่ง', 2: 'ไม่สามารถระบุตำแหน่งได้', 3: 'หมดเวลา' };
-    toast('❌ ' + (msgs[err.code] || 'เกิดข้อผิดพลาด'));
-    setStatus('ไม่สามารถระบุตำแหน่งได้');
-  }, { enableHighAccuracy: true, timeout: 10000 });
+    var msgs = {1:'Location access denied', 2:'Unable to detect location', 3:'Timeout'};
+    toast('❌ ' + (msgs[err.code] || 'An error occurred'));
+    setStatus('Unable to detect location');
+  }, {enableHighAccuracy:true, timeout:10000});
 }
 
 function useMyLocation() {
-  if (!navigator.geolocation) { toast('เบราว์เซอร์ไม่รองรับ Geolocation'); return; }
+  if (!navigator.geolocation) { toast('Geolocation not supported'); return; }
   navigator.geolocation.getCurrentPosition(function(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     setOriginPoint(lat, lng);
-    map.setView([lat, lng], 14);
+    map.setView([lat,lng], 14);
     switchTab('nav');
-    toast('📍 ใช้ตำแหน่งของคุณเป็นจุดเริ่มต้น');
-  }, function() { toast('❌ ไม่สามารถระบุตำแหน่งได้'); });
+    toast('📍 Using your location as start');
+  }, function() { toast('❌ Unable to detect location'); });
 }
 
-function goToMyLocation() {
-  if (myCoords) map.setView(myCoords, 16);
-  else { toast('ยังไม่ได้ระบุตำแหน่ง'); }
-}
+function goToMyLocation() { if (myCoords) map.setView(myCoords, 16); else toast('Location not yet detected'); }
 
 function copyCoords() {
   if (!myCoords) return;
-  var text = myCoords[0].toFixed(6) + ', ' + myCoords[1].toFixed(6);
-  navigator.clipboard.writeText(text).then(function() { toast('📋 คัดลอกพิกัดแล้ว'); });
+  navigator.clipboard.writeText(myCoords[0].toFixed(6) + ', ' + myCoords[1].toFixed(6))
+    .then(function(){toast('📋 Coordinates copied');});
 }
 
-// ─── TILE SWITCHER ────────────────────────────────────────
+// ── TILE ──────────────────────────────────────────────────
 function switchTile(type, btn) {
-  document.querySelectorAll('.tile-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('.tile-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   if (tileLayer) map.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(tiles[type], { attribution: tileAttribs[type], maxZoom: 19 }).addTo(map);
+  tileLayer = L.tileLayer(tiles[type], {attribution:tileAttribs[type], maxZoom:19}).addTo(map);
 }
 
-// ─── UI HELPERS ───────────────────────────────────────────
+// ── UI HELPERS ────────────────────────────────────────────
 function switchTab(id) {
-  document.querySelectorAll('.tab').forEach(function(t,i) {
-    t.classList.toggle('active', ['nav','search','location'][i] === id);
+  document.querySelectorAll('.tab').forEach(function(t,i){
+    t.classList.toggle('active', ['nav','search','location'][i]===id);
   });
-  document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
-  document.getElementById('tab-' + id).classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(function(c){c.classList.remove('active');});
+  document.getElementById('tab-'+id).classList.add('active');
+  if (id === 'search') renderHistory();
 }
 
 function setMode(btn) {
-  document.querySelectorAll('.mode-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('.mode-btn').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   travelMode = btn.dataset.mode;
 }
 
-function zoomIn()  { map.zoomIn(); }
+function zoomIn() { map.zoomIn(); }
 function zoomOut() { map.zoomOut(); }
-
 function setStatus(msg) { document.getElementById('status-text').textContent = msg; }
+function togglePanel() { document.getElementById('panel').classList.toggle('open'); }
 
 var toastTimer;
 function toast(msg) {
@@ -1096,19 +771,10 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2800);
+  toastTimer = setTimeout(function(){el.classList.remove('show');}, 3000);
 }
 
-function togglePanel() {
-  document.getElementById('panel').classList.toggle('open');
-}
-
-// ─── INIT ─────────────────────────────────────────────────
 initMap();
-
-// Initial instructions
-document.getElementById('no-route').innerHTML = '🖱️ คลิกแผนที่เพื่อเลือกจุด<br>หรือพิมพ์ชื่อสถานที่ด้านบน';
-
 </script>
 </body>
 </html>
