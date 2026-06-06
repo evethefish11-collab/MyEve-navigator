@@ -143,6 +143,16 @@
   .popup-coords { font-family:'Space Mono',monospace; font-size:10px; color:var(--text-dim); }
   .popup-btn { display:inline-block; margin-top:8px; padding:5px 12px; background:var(--accent); color:#000; font-size:11px; font-weight:700; border-radius:6px; cursor:pointer; font-family:'Syne',sans-serif; border:none; }
 
+
+  /* CAR MARKER */
+  .car-marker-wrap { width:32px; height:32px; display:flex; align-items:center; justify-content:center; }
+  .car-svg { width:28px; height:28px; filter:drop-shadow(0 2px 6px rgba(0,0,0,0.5)); transition:transform 0.3s; }
+
+  /* SOUND TOGGLE */
+  #sound-btn { position:fixed; right:16px; top:16px; z-index:1100; width:44px; height:44px; background:var(--surface); border:1px solid var(--border); border-radius:10px; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text); box-shadow:0 2px 12px rgba(0,0,0,0.4); transition:all 0.2s; }
+  #sound-btn.muted { color:var(--text-dim); border-color:var(--border); }
+  #sound-btn.active { color:var(--accent); border-color:var(--accent); }
+
   /* MISC */
   .divider { height:1px; background:var(--border); margin:2px 0; flex-shrink:0; }
   ::-webkit-scrollbar { width:4px; }
@@ -315,6 +325,7 @@
 </div>
 
 <div id="toast"></div>
+<button id="sound-btn" class="muted" onclick="toggleSound()" title="Toggle Voice">🔇</button>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -328,6 +339,11 @@ var routeSteps = [];
 var currentStep = 0;
 var navActive = false;
 var navWatchId = null;
+var carMarker = null;
+var routeCoords = [];
+var soundEnabled = false;
+var carAnimFrame = null;
+var carProgress = 0;
 
 var tiles = {
   street: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -478,6 +494,7 @@ function calcRoute() {
       document.getElementById('no-route').style.display = 'none';
 
       routeSteps = route.legs[0].steps;
+      routeCoords = route.geometry.coordinates.map(function(c){return [c[1],c[0]];});
       renderSteps(routeSteps);
 
       document.getElementById('btn-start-nav').classList.add('show');
@@ -529,34 +546,136 @@ function getStepIcon(type, mod) {
   return '⬆️';
 }
 
+// ── SOUND ─────────────────────────────────────────────────
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  var btn = document.getElementById('sound-btn');
+  btn.textContent = soundEnabled ? '🔊' : '🔇';
+  btn.className = soundEnabled ? 'active' : 'muted';
+  toast(soundEnabled ? '🔊 Voice guidance ON' : '🔇 Voice guidance OFF');
+}
+
+function speak(text) {
+  if (!soundEnabled) return;
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  var u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.95;
+  u.pitch = 1;
+  u.volume = 1;
+  window.speechSynthesis.speak(u);
+}
+
+function getSpokenInstruction(step) {
+  var type = step.maneuver.type;
+  var mod = step.maneuver.modifier || '';
+  var name = step.name ? 'onto ' + step.name : '';
+  var dist = step.distance > 1000
+    ? 'in ' + (step.distance/1000).toFixed(1) + ' kilometers'
+    : 'in ' + Math.round(step.distance) + ' meters';
+  if (type === 'depart') return 'Start navigation. Head ' + (mod || 'forward') + ' ' + name;
+  if (type === 'arrive') return 'You have arrived at your destination';
+  if (type === 'roundabout') return 'Enter the roundabout ' + dist;
+  if (mod === 'left') return 'Turn left ' + name + ' ' + dist;
+  if (mod === 'right') return 'Turn right ' + name + ' ' + dist;
+  if (mod === 'slight left') return 'Keep slight left ' + name;
+  if (mod === 'slight right') return 'Keep slight right ' + name;
+  if (mod === 'sharp left') return 'Turn sharp left ' + name;
+  if (mod === 'sharp right') return 'Turn sharp right ' + name;
+  if (mod === 'uturn') return 'Make a U-turn';
+  return 'Continue straight ' + name + ' ' + dist;
+}
+
+// ── CAR MARKER ────────────────────────────────────────────
+function makeCarIcon(bearing) {
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">' +
+    '<g transform="rotate(' + bearing + ' 20 20)">' +
+    '<ellipse cx="20" cy="20" rx="11" ry="16" fill="#00ccff" stroke="white" stroke-width="2"/>' +
+    '<polygon points="20,5 26,15 14,15" fill="white" opacity="0.9"/>' +
+    '<rect x="12" y="26" width="6" height="4" rx="1" fill="#ff4466"/>' +
+    '<rect x="22" y="26" width="6" height="4" rx="1" fill="#ff4466"/>' +
+    '<rect x="12" y="12" width="16" height="8" rx="2" fill="rgba(255,255,255,0.3)"/>' +
+    '</g></svg>';
+  return L.divIcon({ html: svg, className: '', iconSize:[40,40], iconAnchor:[20,20] });
+}
+
+function calcBearing(lat1, lng1, lat2, lng2) {
+  var dLng = (lng2 - lng1) * Math.PI / 180;
+  var rlat1 = lat1 * Math.PI / 180;
+  var rlat2 = lat2 * Math.PI / 180;
+  var y = Math.sin(dLng) * Math.cos(rlat2);
+  var x = Math.cos(rlat1)*Math.sin(rlat2) - Math.sin(rlat1)*Math.cos(rlat2)*Math.cos(dLng);
+  return ((Math.atan2(y,x) * 180/Math.PI) + 360) % 360;
+}
+
+function placeCarAt(idx) {
+  if (!routeCoords.length) return;
+  var i = Math.min(idx, routeCoords.length - 1);
+  var pos = routeCoords[i];
+  var next = routeCoords[Math.min(i+1, routeCoords.length-1)];
+  var bearing = calcBearing(pos[0], pos[1], next[0], next[1]);
+  if (!carMarker) {
+    carMarker = L.marker(pos, { icon: makeCarIcon(bearing), zIndexOffset: 1000 }).addTo(map);
+  } else {
+    carMarker.setLatLng(pos);
+    carMarker.setIcon(makeCarIcon(bearing));
+  }
+  map.panTo(pos, {animate:true, duration:0.5});
+}
+
+function animateCar() {
+  if (!navActive || !routeCoords.length) return;
+  carProgress = Math.min(carProgress + 0.3, routeCoords.length - 1);
+  placeCarAt(Math.floor(carProgress));
+  if (carProgress < routeCoords.length - 1) {
+    carAnimFrame = setTimeout(animateCar, 80);
+  } else {
+    speak('You have arrived at your destination');
+    toast('🏁 Arrived!');
+  }
+}
+
 // ── START NAVIGATION ──────────────────────────────────────
 function startNavigation() {
   if (!routeSteps.length) { toast('⚠️ Calculate a route first'); return; }
   navActive = true;
   currentStep = 0;
+  carProgress = 0;
   document.getElementById('nav-banner').classList.add('show');
   updateBanner(0);
   highlightStep(0);
+  speak(getSpokenInstruction(routeSteps[0]));
   toast('▶ Navigation started!');
   setStatus('Navigation active...');
+
+  // Start car animation
+  if (carAnimFrame) clearTimeout(carAnimFrame);
+  animateCar();
 
   if (navigator.geolocation) {
     navWatchId = navigator.geolocation.watchPosition(function(pos) {
       var lat = pos.coords.latitude, lng = pos.coords.longitude;
       myCoords = [lat, lng];
-      if (myMarker) map.removeLayer(myMarker);
-      myMarker = L.marker([lat,lng], {
-        icon: L.divIcon({html:'<div class="my-location-marker"></div>', className:'', iconSize:[16,16], iconAnchor:[8,8]})
-      }).addTo(map);
+
+      // Snap car to nearest route point
+      var nearest = 0, minD = Infinity;
+      for (var i = 0; i < routeCoords.length; i++) {
+        var d = haversine(lat, lng, routeCoords[i][0], routeCoords[i][1]);
+        if (d < minD) { minD = d; nearest = i; }
+      }
+      carProgress = nearest;
+      placeCarAt(nearest);
 
       // Auto-advance step if close enough
       if (routeSteps[currentStep]) {
         var stepLoc = routeSteps[currentStep].maneuver.location;
-        var d = haversine(lat, lng, stepLoc[1], stepLoc[0]);
-        if (d < 30 && currentStep < routeSteps.length - 1) {
+        var d2 = haversine(lat, lng, stepLoc[1], stepLoc[0]);
+        if (d2 < 30 && currentStep < routeSteps.length - 1) {
           currentStep++;
           updateBanner(currentStep);
           highlightStep(currentStep);
+          speak(getSpokenInstruction(routeSteps[currentStep]));
         }
       }
     }, function(){}, {enableHighAccuracy:true});
@@ -565,8 +684,12 @@ function startNavigation() {
 
 function stopNavigation() {
   navActive = false;
+  if (carAnimFrame) { clearTimeout(carAnimFrame); carAnimFrame = null; }
+  if (carMarker) { map.removeLayer(carMarker); carMarker = null; }
+  carProgress = 0;
   document.getElementById('nav-banner').classList.remove('show');
   if (navWatchId !== null) { navigator.geolocation.clearWatch(navWatchId); navWatchId = null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
   setStatus('OpenStreetMap · Ready');
   toast('Navigation ended');
 }
